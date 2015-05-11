@@ -4,13 +4,29 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 
-	redis "github.com/xuyu/goredis"
+	redislib "github.com/xuyu/goredis"
 )
+
+var redis = initRedis()
+var challenge = []byte("secured")
+
+func initRedis() *redislib.Redis {
+	client, err := redislib.Dial(&redislib.DialConfig{Address: "127.0.0.1:6379"})
+	if err != nil {
+		log.Printf("Cannot connect to redis. %s", err)
+		os.Exit(1)
+	}
+	log.Print("Connected to redis")
+	return client
+}
 
 func main() {
 	http.HandleFunc("/room", room)
@@ -19,15 +35,10 @@ func main() {
 }
 
 func room(w http.ResponseWriter, r *http.Request) {
-	client, err := redis.Dial(&redis.DialConfig{Address: "127.0.0.1:6379"})
-	if err != nil {
-		log.Printf("Error connecting to redis. %s", err)
-		http.Error(w, "", http.StatusInternalServerError)
-	}
 	room := r.FormValue("room")
 	pkey := r.FormValue("pkey")
 
-	keyerr := client.Set(room, pkey, 3600, 0, false, true)
+	keyerr := redis.Set(room, pkey, 3600, 0, false, true)
 	if keyerr != nil {
 		log.Printf("Cannot create room '%s'. %s", room, keyerr)
 		http.Error(w, "", http.StatusInternalServerError)
@@ -35,17 +46,12 @@ func room(w http.ResponseWriter, r *http.Request) {
 }
 
 func join(w http.ResponseWriter, r *http.Request) {
-	client, err := redis.Dial(&redis.DialConfig{Address: "127.0.0.1:6379"})
-
 	room := r.FormValue("room")
 	sigints := strings.Split(r.FormValue("sig"), ",")
 
-	pkey, err := client.Get(room)
-	pkeyder, _ := base64.StdEncoding.DecodeString(string(pkey))
-
-	public_key, err := x509.ParsePKIXPublicKey(pkeyder)
+	pubkey, err := getPublicKey(room)
 	if err != nil {
-		log.Printf("Cannot decode public key for room '%s'. %s", room, err)
+		log.Printf("Cannot use public key for room '%s'. %s", room, err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -53,20 +59,35 @@ func join(w http.ResponseWriter, r *http.Request) {
 	x, _ := new(big.Int).SetString(sigints[0], 10)
 	y, _ := new(big.Int).SetString(sigints[1], 10)
 
-	switch public_key := public_key.(type) {
-	case *ecdsa.PublicKey:
-		validsig := ecdsa.Verify(public_key, []byte("secured"), x, y)
-		if validsig {
-			log.Printf("Signature valid for %s", room)
-			http.Error(w, "", http.StatusOK)
-		} else {
-			http.Error(w, "", http.StatusInternalServerError)
-		}
+	validsig := ecdsa.Verify(pubkey, challenge, x, y)
+	if validsig {
+		log.Printf("Joining '%s': signature valid", room)
 		return
-	default:
-		log.Printf("Fail challenge for joinig room '%s'", room)
-		http.Error(w, "", http.StatusInternalServerError)
-		return
+	} else {
+		http.Error(w, "", http.StatusNotFound)
+	}
+}
+
+func getPublicKey(room string) (*ecdsa.PublicKey, error) {
+	key, err := redis.Get(room)
+	if err != nil {
+		m := fmt.Sprintf("Public key for room '%s': error retrieving key: %s", room, err)
+		log.Print(m)
+		return nil, errors.New(m)
 	}
 
+	keyder, err := base64.StdEncoding.DecodeString(string(key))
+	if err != nil {
+		m := fmt.Sprintf("Public key for room '%s': failed to base64 decode: %s", room, err)
+		log.Print(m)
+		return nil, errors.New(m)
+	}
+
+	pubkey, err := x509.ParsePKIXPublicKey(keyder)
+	switch pubkey := pubkey.(type) {
+	case *ecdsa.PublicKey:
+		return pubkey, nil
+	default:
+		return nil, fmt.Errorf("Public key for room '%s': invalid type (%s)", room, pubkey)
+	}
 }
