@@ -6,11 +6,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
 	"os"
 	"strings"
+
+	"golang.org/x/net/websocket"
 
 	redislib "github.com/xuyu/goredis"
 )
@@ -28,9 +31,14 @@ func initRedis() *redislib.Redis {
 	return client
 }
 
+func echo(conn *websocket.Conn) {
+	io.Copy(conn, conn)
+}
+
 func main() {
+	wsHandler := websocket.Server{Handshake: join, Handler: echo}
 	http.HandleFunc("/room", room)
-	http.HandleFunc("/join", join)
+	http.Handle("/join", wsHandler)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -45,15 +53,15 @@ func room(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func join(w http.ResponseWriter, r *http.Request) {
+func join(config *websocket.Config, r *http.Request) error {
 	room := r.FormValue("room")
 	sigints := strings.Split(r.FormValue("sig"), ",")
 
 	pubkey, err := getPublicKey(room)
 	if err != nil {
-		log.Printf("Cannot use public key for room '%s'. %s", room, err)
-		http.Error(w, "", http.StatusInternalServerError)
-		return
+		m := fmt.Sprintf("Cannot use public key for room '%s'. %s", room, err)
+		log.Print(m)
+		return errors.New(m)
 	}
 
 	x, _ := new(big.Int).SetString(sigints[0], 10)
@@ -61,10 +69,12 @@ func join(w http.ResponseWriter, r *http.Request) {
 
 	validsig := ecdsa.Verify(pubkey, challenge, x, y)
 	if validsig {
-		log.Printf("Joining '%s': signature valid", room)
-		return
+		log.Printf("Handshaked for room '%s': signature valid", room)
+		return nil
 	} else {
-		http.Error(w, "", http.StatusNotFound)
+		m := fmt.Sprintf("Handshake failed for room '%s': invalid signature", room)
+		log.Print(m)
+		return errors.New(m)
 	}
 }
 

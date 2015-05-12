@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+
+	"golang.org/x/net/websocket"
 )
 
 func TestCreateRoom(t *testing.T) {
@@ -39,12 +41,19 @@ func TestCreateRoom(t *testing.T) {
 		t.Errorf("Cannot sign with private key. %s", err)
 	}
 
-	resp, err = http.PostForm("http://127.0.0.1:8080/join", url.Values{
-		"room": {room},
-		"sig":  {fmt.Sprintf("%s,%s", r, s)},
-	})
+	origin := "http://127.0.0.1:8080/"
+	u, _ := url.Parse("ws://127.0.0.1:8080/join")
+	params := url.Values{}
+	params.Add("room", room)
+	params.Add("sig", fmt.Sprintf("%s,%s", r, s))
+	u.RawQuery = params.Encode()
+	ws, err := websocket.Dial(u.String(), "", origin)
 
-	if status := resp.StatusCode; status != 200 {
-		t.Errorf("Challenge failed for room '%s'. Expecting status 200 but was %d", room, status)
+	if err != nil {
+		t.Errorf("Websocket connection failed for room '%s'. %s", room, err)
+	}
+
+	if _, err := ws.Write([]byte("hello\n")); err != nil {
+		t.Errorf("Failed to write message to correctly open websocket")
 	}
 }
