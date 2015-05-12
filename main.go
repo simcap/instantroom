@@ -63,6 +63,7 @@ func main() {
 
 func room(w http.ResponseWriter, r *http.Request) {
 	room := r.FormValue("room")
+	username := r.FormValue("username")
 	pkey := r.FormValue("pkey")
 
 	keyerr := redis.Set(room, pkey, 3600, 0, false, true)
@@ -70,6 +71,8 @@ func room(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Cannot create room '%s'. %s", room, keyerr)
 		http.Error(w, "", http.StatusInternalServerError)
 	}
+
+	log.Printf("Created room '%s' for user '%s'", room, username)
 }
 
 func join(config *websocket.Config, r *http.Request) error {
