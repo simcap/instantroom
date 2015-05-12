@@ -52,15 +52,15 @@ func (c *Client) CreateRoom(room string) error {
 	return nil
 }
 
-func (c *Client) JoinRoom(room string) error {
+func (c *Client) JoinRoom(room string) (*websocket.Conn, error) {
 	privkey, err := c.GetPrivateKey(room)
 	if err != nil {
-		return fmt.Errorf("Joining room '%s': cannot get private key: %s", room, err)
+		return nil, fmt.Errorf("Joining room '%s': cannot get private key: %s", room, err)
 	}
 
 	r, s, err := ecdsa.Sign(rand.Reader, privkey, []byte("secured"))
 	if err != nil {
-		return fmt.Errorf("Joining room '%s': cannot sign with private key: %s", room, err)
+		return nil, fmt.Errorf("Joining room '%s': cannot sign with private key: %s", room, err)
 	}
 
 	origin := fmt.Sprintf("http://%s/", c.Host)
@@ -71,15 +71,15 @@ func (c *Client) JoinRoom(room string) error {
 	params.Add("sig", fmt.Sprintf("%s,%s", r, s))
 	u.RawQuery = params.Encode()
 
-	_, errws := websocket.Dial(u.String(), "", origin)
+	ws, errws := websocket.Dial(u.String(), "", origin)
 	if errws != nil {
-		return fmt.Errorf("Joining room '%s': websocket dial failed: %s", room, errws)
+		return nil, fmt.Errorf("Joining room '%s': websocket dial failed: %s", room, errws)
 	}
 
-	return nil
+	return ws, nil
 }
 
-// Command line client implementation of a Keystore
+// Keystore implementation for a command line client
 type CLIKeystore struct {
 	StoragePath string
 }
@@ -119,4 +119,38 @@ func (k *CLIKeystore) GetPrivateKey(room string) (*ecdsa.PrivateKey, error) {
 	privkey_bytes, _ := ioutil.ReadFile(filepath.Join(k.StoragePath, room, "private.der"))
 	privkey, err := x509.ParseECPrivateKey(privkey_bytes)
 	return privkey, err
+}
+
+// Keystore implementation for test
+type MemoryKeystore struct {
+	privkeys map[string]*ecdsa.PrivateKey
+}
+
+func NewMemoryKeystore() *MemoryKeystore {
+	return &MemoryKeystore{make(map[string]*ecdsa.PrivateKey)}
+}
+
+func (k *MemoryKeystore) GetPublicKeyBytes(room string) ([]byte, error) {
+	privkey, err := k.GetPrivateKey(room)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := x509.MarshalPKIXPublicKey(&privkey.PublicKey)
+	return bytes, err
+}
+
+func (k *MemoryKeystore) GetPublicKeyBase64(room string) (string, error) {
+	bytes, err := k.GetPublicKeyBytes(room)
+	encoded := base64.StdEncoding.EncodeToString(bytes)
+	return encoded, err
+}
+
+func (k *MemoryKeystore) GetPrivateKey(room string) (*ecdsa.PrivateKey, error) {
+	return k.privkeys[room], nil
+}
+
+func (k *MemoryKeystore) GenerateKeys(room string) (*ecdsa.PrivateKey, error) {
+	p, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	k.privkeys[room] = p
+	return p, err
 }

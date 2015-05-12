@@ -33,7 +33,7 @@ func main() {
 	}
 
 	if *join != "" {
-		err := service.JoinRoom(*join)
+		_, err := service.JoinRoom(*join)
 		if err != nil {
 			log.Fatal(err)
 		}
