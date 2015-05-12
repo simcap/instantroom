@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -31,12 +30,32 @@ func initRedis() *redislib.Redis {
 	return client
 }
 
-func echo(conn *websocket.Conn) {
-	io.Copy(conn, conn)
+type Room struct {
+	name        string
+	connections map[string]*websocket.Conn
+}
+
+var rooms = map[string]*Room{}
+
+func dispatch(conn *websocket.Conn) {
+	room := conn.Request().FormValue("room")
+	username := conn.Request().FormValue("username")
+	if r, ok := rooms[room]; ok {
+		if _, ok := r.connections[username]; ok {
+			log.Printf("%s already in room %s", username, room)
+		} else {
+			r.connections[username] = conn
+		}
+	} else {
+		log.Printf("Adding new room %s for username %s", room, username)
+		newRoom := Room{name: room, connections: make(map[string]*websocket.Conn)}
+		newRoom.connections[username] = conn
+		rooms[room] = &newRoom
+	}
 }
 
 func main() {
-	wsHandler := websocket.Server{Handshake: join, Handler: echo}
+	wsHandler := websocket.Server{Handshake: join, Handler: dispatch}
 	http.HandleFunc("/room", room)
 	http.Handle("/join", wsHandler)
 	http.ListenAndServe(":8080", nil)

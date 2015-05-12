@@ -45,6 +45,7 @@ func TestCreateRoom(t *testing.T) {
 	u, _ := url.Parse("ws://127.0.0.1:8080/join")
 	params := url.Values{}
 	params.Add("room", room)
+	params.Add("username", "siegfried")
 	params.Add("sig", fmt.Sprintf("%s,%s", r, s))
 	u.RawQuery = params.Encode()
 	ws, err := websocket.Dial(u.String(), "", origin)
