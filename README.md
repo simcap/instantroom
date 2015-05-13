@@ -15,13 +15,19 @@ InstantRoom makes that easy with:
 InstantRoom does not persist any messages on the server nor can it decrypt any messages since the secret key is only
 generated and managed on the user's client application side.
 
+InstantRoom abide by the Kerckhoffs's principle:
+
+> A cryptosystem should be secure even if everything about the system, except the key, is public knowledge
+
 ## Features
 
-- InstantRoom's secret keys have a mini format for easy sharing
-- InstantRoom's secret keys can be displayed as a QR code for phone to phone sharing
-- InstantRoom application's code is in the open and inspectable by anyone
-- InstantRoom's server does not store any messages
-- InstantRoom's server cannot decrypt any messages. It only relays them
+- Secret keys have a mini format for easy sharing
+- Secret keys can be displayed as a QR code for phone to phone sharing
+- Rooms auto expire. One can choose a 1 hour room, 1 day room, 1 week room, etc...
+- Messages are only local on the client side. You can chooses to delete some or all of them at anytime
+- The application's code is in the open and inspectable by anyone
+- The server does not store any messages
+- The server cannot decrypt any messages. It only relays them
 
 ## Upcoming features
 
@@ -49,5 +55,24 @@ Orally | being heard by third party | unlikely (as can be easily circumvented)
 Direct contact reading through QR code |  side channel | unlikely (as very elaborate and spottable)
 Remote webcam reading through QR code | insecure channel | possible
 
+## Kerckhoffs's six design principles
+
+We believe InstantRoom stands by those principles
+
+Principles| Status
+---|---
+The system must be practically, if not mathematically, indecipherable|&#10003;
+It should not require secrecy, and it should not be a problem if it falls into enemy hands|&#10003;
+It must be possible to communicate and remember the key without using written notes, and correspondents must be able to change or modify it at will|&#10003;
+It must be applicable to telegraph communications|&#10003;
+It must be portable, and should not require several persons to handle or operate|&#10003;
+The system must be easy to use and should not be stressful to use or require its users to know and comply with a long list of rules|&#10003;
+
+
 ##  Technicalities
+
+- Private and public keys are generated through ECDSA P-256
+- The mini private key format is done through the Bitcoin's 30 characters format
+- The encryption is done through AES using the private key as the cypher key. The key size is therefore 256 bits.
+
 
