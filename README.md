@@ -12,8 +12,8 @@ InstantRoom makes that easy with:
 - _a secret key with mini format for easy sharing_
 - _or a secret key as QR code for direct phone to phone sharing_
 
-InstantRoom does not persist any messages on the server nor can it decrypt any messages since the secret key is only
-generated and managed on the user's client application side.
+InstantRoom does not persist any messages on the server nor can it decrypts any messages since the secret key is only
+generated and managed from the user's client application side.
 
 InstantRoom abides by the Kerckhoffs's principle:
 
@@ -28,6 +28,7 @@ InstantRoom abides by the Kerckhoffs's principle:
 - The application's code is in the open and inspectable by anyone
 - The server does not store any messages
 - The server cannot decrypt any messages. It only relays them
+- Avoid mpOTR (Multi-party Off-the-Record Messaging) complexity
 
 ## Upcoming features
 
