@@ -15,9 +15,9 @@ InstantRoom makes that easy with:
 InstantRoom does not persist any messages on the server nor can it decrypt any messages since the secret key is only
 generated and managed on the user's client application side.
 
-InstantRoom abide by the Kerckhoffs's principle:
+InstantRoom abides by the Kerckhoffs's principle:
 
-> A cryptosystem should be secure even if everything about the system, except the key, is public knowledge
+> _A cryptosystem should be secure even if everything about the system, except the key, is public knowledge_
 
 ## Features
 
@@ -31,12 +31,12 @@ InstantRoom abide by the Kerckhoffs's principle:
 
 ## Upcoming features
 
-1. Local access to secret keys on the client side will be password protected
-2. Your own InstantRoom! Executables will be available to install your own InstantRoom server. The client applications will allow to point to any server's url
+- Local access to secret keys on the client side will be password protected
+- Your own InstantRoom! Executables will be available to install your own InstantRoom server. The client applications will allow to point to any server's url
 
 ## Attack scenarios
 
-InstantRoom is based on the secrecy of your private key generated through the Public Key Infrastructure. So leaving aside advanced implementation attacks scenario, here is the only way your group chat can be compromised:
+InstantRoom is based on the secrecy of your private key generated through the _Public Key Infrastructure_. So leaving aside advanced implementation attacks scenario, here is the only way your group chat can be compromised:
 
 - the attacker gets hold of your secret key!
 
