@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -24,6 +25,11 @@ func TestCreateRoomAndJoin(t *testing.T) {
 		"127.0.0.1:8080",
 	}
 
+	privkey, _ := user.GetPrivateKey(room)
+	aeskeyhex := fmt.Sprintf("%x", privkey.D)
+	aeskeybytes, _ := hex.DecodeString(aeskeyhex)
+	var AES = client.NewAESCodec(aeskeybytes)
+
 	err := user.CreateRoom(room)
 	if err != nil {
 		t.Errorf("Cannot create room %s: %s", room, err)
@@ -38,17 +44,16 @@ func TestCreateRoomAndJoin(t *testing.T) {
 	if err != nil {
 		t.Errorf("Websocket connection failed for room '%s'. %s", room, err)
 	}
+	ws2 = ws2
 
-	if _, err := ws.Write([]byte("hello")); err != nil {
+	if err := AES.Send(ws, []byte("hello here I am mister")); err != nil {
 		t.Errorf("Failed to write message to correctly open websocket: %s", err)
 	}
 
-	fmt.Printf("Reading %v", ws2)
-
-	var msg = make([]byte, 100)
-	if _, err := ws.Read(msg); err != nil {
+	var msg []byte
+	if err := AES.Receive(ws, &msg); err != nil {
 		t.Errorf("Failed to read message '%s' to correctly open websocket: %s", string(msg), err)
 	}
 
-	fmt.Printf("Received message: %s", string(msg))
+	fmt.Printf("Received message: %q\n", string(msg))
 }

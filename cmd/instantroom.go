@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,15 +35,20 @@ func main() {
 	}
 
 	if *join != "" {
+		privkey, _ := service.GetPrivateKey(*join)
+		aeskeyhex := fmt.Sprintf("%x", privkey.D)
+		aeskeybytes, _ := hex.DecodeString(aeskeyhex)
+		var AES = client.NewAESCodec(aeskeybytes)
+
 		ws, err := service.JoinRoom(*join)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if _, err := ws.Write([]byte("hello\n")); err != nil {
+		if err := AES.Send(ws, []byte("hello")); err != nil {
 			log.Fatalf("Failed to write message on websocket: %s", err)
 		}
 		var msg = make([]byte, 100)
-		if _, err := ws.Read(msg); err != nil {
+		if err := AES.Receive(ws, &msg); err != nil {
 			log.Fatalf("Failed to read message on websocket: %s", err)
 		}
 		log.Printf("Message received: %s", string(msg))
