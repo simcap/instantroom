@@ -31,8 +31,24 @@ func initRedis() *redislib.Redis {
 }
 
 type Room struct {
-	name        string
-	connections map[string]*websocket.Conn
+	name  string
+	users map[string]*websocket.Conn
+}
+
+func (r *Room) Add(username string, conn *websocket.Conn) {
+	r.users[username] = conn
+	log.Printf("%#v", r.users)
+	var msg = make([]byte, 1024)
+	n, err := conn.Read(msg)
+	if err != nil {
+		log.Printf("Received %d bytes. %s\n", n, err)
+	} else if n > 0 {
+		log.Printf("Replicating msg '%s' to all", string(msg[:n]))
+		for u, c := range r.users {
+			log.Printf("Writing message '%s' to %s ", string(msg[:n]), u)
+			c.Write(msg[:n])
+		}
+	}
 }
 
 var rooms = map[string]*Room{}
@@ -40,16 +56,18 @@ var rooms = map[string]*Room{}
 func dispatch(conn *websocket.Conn) {
 	room := conn.Request().FormValue("room")
 	username := conn.Request().FormValue("username")
+
 	if r, ok := rooms[room]; ok {
-		if _, ok := r.connections[username]; ok {
+		if _, ok := r.users[username]; ok {
 			log.Printf("%s already in room %s", username, room)
 		} else {
-			r.connections[username] = conn
+			log.Printf("Adding new user %s for room %s", username, room)
+			r.Add(username, conn)
 		}
 	} else {
 		log.Printf("Adding new room %s for username %s", room, username)
-		newRoom := Room{name: room, connections: make(map[string]*websocket.Conn)}
-		newRoom.connections[username] = conn
+		newRoom := Room{name: room, users: make(map[string]*websocket.Conn)}
+		newRoom.Add(username, conn)
 		rooms[room] = &newRoom
 	}
 }

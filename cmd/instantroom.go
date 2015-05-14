@@ -33,9 +33,17 @@ func main() {
 	}
 
 	if *join != "" {
-		_, err := service.JoinRoom(*join)
+		ws, err := service.JoinRoom(*join)
 		if err != nil {
 			log.Fatal(err)
 		}
+		if _, err := ws.Write([]byte("hello\n")); err != nil {
+			log.Fatalf("Failed to write message on websocket: %s", err)
+		}
+		var msg = make([]byte, 100)
+		if _, err := ws.Read(msg); err != nil {
+			log.Fatalf("Failed to read message on websocket: %s", err)
+		}
+		log.Printf("Message received: %s", string(msg))
 	}
 }
