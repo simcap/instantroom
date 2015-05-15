@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/simcap/instantroom/client"
 )
@@ -44,13 +45,29 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := AES.Send(ws, []byte("hello")); err != nil {
-			log.Fatalf("Failed to write message on websocket: %s", err)
+
+		go func() {
+			for {
+				var msg = make([]byte, 140)
+				if err := AES.Receive(ws, &msg); err == nil {
+					splits := strings.Split(string(msg), ":")
+					name, message := splits[0], splits[1]
+					if name != *username {
+						log.Printf("%s> %s", name, message)
+					}
+				}
+			}
+		}()
+
+		for {
+			message := ""
+			_, errscan := fmt.Scanln(&message)
+			if errscan != nil {
+				log.Fatalf("Failed to read user input %s (message: '%q')", err, message)
+			}
+			if err := AES.Send(ws, []byte(*username+":"+message)); err != nil {
+				log.Fatalf("Failed to write message on websocket: %s", err)
+			}
 		}
-		var msg = make([]byte, 100)
-		if err := AES.Receive(ws, &msg); err != nil {
-			log.Fatalf("Failed to read message on websocket: %s", err)
-		}
-		log.Printf("Message received: %s", string(msg))
 	}
 }

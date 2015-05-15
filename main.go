@@ -35,42 +35,7 @@ type Room struct {
 	users map[string]*websocket.Conn
 }
 
-func (r *Room) Add(username string, conn *websocket.Conn) {
-	r.users[username] = conn
-	log.Printf("%#v", r.users)
-	var msg = make([]byte, 1024)
-	n, err := conn.Read(msg)
-	if err != nil {
-		log.Printf("Received %d bytes. %s\n", n, err)
-	} else if n > 0 {
-		log.Printf("Replicating msg '%s' to all", string(msg[:n]))
-		for u, c := range r.users {
-			log.Printf("Writing message '%s' to %s ", string(msg[:n]), u)
-			c.Write(msg[:n])
-		}
-	}
-}
-
 var rooms = map[string]*Room{}
-
-func dispatch(conn *websocket.Conn) {
-	room := conn.Request().FormValue("room")
-	username := conn.Request().FormValue("username")
-
-	if r, ok := rooms[room]; ok {
-		if _, ok := r.users[username]; ok {
-			log.Printf("%s already in room %s", username, room)
-		} else {
-			log.Printf("Adding new user %s for room %s", username, room)
-			r.Add(username, conn)
-		}
-	} else {
-		log.Printf("Adding new room %s for username %s", room, username)
-		newRoom := Room{name: room, users: make(map[string]*websocket.Conn)}
-		newRoom.Add(username, conn)
-		rooms[room] = &newRoom
-	}
-}
 
 func main() {
 	wsHandler := websocket.Server{Handshake: join, Handler: dispatch}
@@ -115,6 +80,44 @@ func join(config *websocket.Config, r *http.Request) error {
 		m := fmt.Sprintf("Handshake failed for room '%s': invalid signature", room)
 		log.Print(m)
 		return errors.New(m)
+	}
+}
+
+func dispatch(conn *websocket.Conn) {
+	username, room := AddUserToRoom(conn)
+	log.Printf("... start dispatching for %#v", room.users)
+	for {
+		var msg = make([]byte, 140)
+		_, err := conn.Read(msg)
+		if err == nil {
+			for u, c := range room.users {
+				_, err := c.Write(msg)
+				if err != nil {
+					log.Printf("Failed replicating message from %s to %s in room: %s", username, u, err)
+				}
+			}
+		}
+	}
+}
+
+func AddUserToRoom(conn *websocket.Conn) (string, *Room) {
+	room := conn.Request().FormValue("room")
+	username := conn.Request().FormValue("username")
+
+	if r, ok := rooms[room]; ok {
+		if _, ok := r.users[username]; ok {
+			log.Printf("%s already in room %s", username, room)
+		} else {
+			log.Printf("Adding new user %s for room %s", username, room)
+			r.users[username] = conn
+		}
+		return username, r
+	} else {
+		log.Printf("Adding new room %s for username %s", room, username)
+		newRoom := Room{name: room, users: make(map[string]*websocket.Conn)}
+		newRoom.users[username] = conn
+		rooms[room] = &newRoom
+		return username, &newRoom
 	}
 }
 
