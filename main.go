@@ -137,6 +137,9 @@ func getPublicKey(room string) (*ecdsa.PublicKey, error) {
 	}
 
 	pubkey, err := x509.ParsePKIXPublicKey(keyder)
+	if err != nil {
+		return nil, fmt.Errorf("Public key for room '%s': failed to parse der: %s", room, err)
+	}
 	switch pubkey := pubkey.(type) {
 	case *ecdsa.PublicKey:
 		return pubkey, nil
