@@ -2,42 +2,33 @@ package client
 
 import (
 	"crypto/aes"
-	"errors"
+	"crypto/cipher"
+	"github.com/gorilla/websocket"
 	"log"
-
-	"golang.org/x/net/websocket"
 )
 
-func NewAESCodec(key []byte) websocket.Codec {
-	block, err := aes.NewCipher(key)
+type AESConnection struct {
+	conn  *websocket.Conn
+	block cipher.Block
+}
+
+func NewAESConnection(c *websocket.Conn, key []byte) *AESConnection {
+	b, err := aes.NewCipher(key)
 	if err != nil {
-		log.Fatalf("New cipher with given failed: %s", err)
+		log.Fatalf("Failed to build block cypher: %s", err)
 	}
+	return &AESConnection{c, b}
+}
 
-	aesEncrypt := func(v interface{}) (msg []byte, payloadType byte, err error) {
-		switch data := v.(type) {
-		case []byte:
-			var dst = make([]byte, 64)
-			block.Encrypt(dst, data)
-			return dst, websocket.BinaryFrame, nil
-		default:
-			log.Fatalf("encrypt: []byte type expected: got %v", data)
-		}
-		return nil, websocket.BinaryFrame, errors.New("encrypt failed")
-	}
+func (c *AESConnection) EncryptMessage(msg []byte) error {
+	var dst = make([]byte, 64)
+	c.block.Encrypt(dst, msg)
+	return c.conn.WriteMessage(websocket.BinaryMessage, dst)
+}
 
-	aesDecrypt := func(msg []byte, payloadType byte, v interface{}) (err error) {
-		switch data := v.(type) {
-		case *[]byte:
-			var dst = make([]byte, 64)
-			block.Decrypt(dst, msg)
-			*data = dst
-			return nil
-		default:
-			log.Fatalf("decrypt: *[]byte type expected: got %v", data)
-		}
-		return nil
-	}
-
-	return websocket.Codec{aesEncrypt, aesDecrypt}
+func (c *AESConnection) DecryptMessage() ([]byte, error) {
+	_, msg, err := c.conn.ReadMessage()
+	var dst = make([]byte, 64)
+	c.block.Decrypt(dst, msg)
+	return dst, err
 }

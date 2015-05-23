@@ -39,17 +39,18 @@ func main() {
 		privkey, _ := service.GetPrivateKey(*join)
 		aeskeyhex := fmt.Sprintf("%x", privkey.D)
 		aeskeybytes, _ := hex.DecodeString(aeskeyhex)
-		var AES = client.NewAESCodec(aeskeybytes)
 
 		ws, err := service.JoinRoom(*join)
+		var AES = client.NewAESConnection(ws, aeskeybytes)
+
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		go func() {
 			for {
-				var msg = make([]byte, 140)
-				if err := AES.Receive(ws, &msg); err == nil {
+				msg, err := AES.DecryptMessage()
+				if err == nil {
 					splits := strings.Split(string(msg), ":")
 					name, message := splits[0], splits[1]
 					if name != *username {
@@ -65,7 +66,7 @@ func main() {
 			if errscan != nil {
 				log.Fatalf("Failed to read user input %s (message: '%q')", err, message)
 			}
-			if err := AES.Send(ws, []byte(*username+":"+message)); err != nil {
+			if err := AES.EncryptMessage([]byte(*username + ":" + message)); err != nil {
 				log.Fatalf("Failed to write message on websocket: %s", err)
 			}
 		}

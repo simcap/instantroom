@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
 type Keystore interface {
@@ -64,6 +64,7 @@ func (c *Client) JoinRoom(room string) (*websocket.Conn, error) {
 	}
 
 	origin := fmt.Sprintf("http://%s/", c.Host)
+	header := http.Header{"Origin": {origin}}
 	u, _ := url.Parse(fmt.Sprintf("ws://%s/join", c.Host))
 	params := url.Values{}
 	params.Add("room", room)
@@ -71,12 +72,12 @@ func (c *Client) JoinRoom(room string) (*websocket.Conn, error) {
 	params.Add("sig", fmt.Sprintf("%s,%s", r, s))
 	u.RawQuery = params.Encode()
 
-	ws, errws := websocket.Dial(u.String(), "", origin)
+	conn, _, errws := websocket.DefaultDialer.Dial(u.String(), header)
 	if errws != nil {
 		return nil, fmt.Errorf("Joining room '%s': websocket dial failed: %s", room, errws)
 	}
 
-	return ws, nil
+	return conn, nil
 }
 
 // Keystore implementation for a command line client

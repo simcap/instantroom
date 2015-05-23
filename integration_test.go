@@ -28,7 +28,6 @@ func TestCreateRoomAndJoin(t *testing.T) {
 	privkey, _ := user.GetPrivateKey(room)
 	aeskeyhex := fmt.Sprintf("%x", privkey.D)
 	aeskeybytes, _ := hex.DecodeString(aeskeyhex)
-	var AES = client.NewAESCodec(aeskeybytes)
 
 	err := user.CreateRoom(room)
 	if err != nil {
@@ -46,12 +45,14 @@ func TestCreateRoomAndJoin(t *testing.T) {
 	}
 	ws2 = ws2
 
-	if err := AES.Send(ws, []byte("hello here I am mister")); err != nil {
+	var AESConn = client.NewAESConnection(ws, aeskeybytes)
+
+	if err := AESConn.EncryptMessage([]byte("hello here I am mister")); err != nil {
 		t.Errorf("Failed to write message to correctly open websocket: %s", err)
 	}
 
-	var msg []byte
-	if err := AES.Receive(ws, &msg); err != nil {
+	msg, err := AESConn.DecryptMessage()
+	if err != nil {
 		t.Errorf("Failed to read message '%s' to correctly open websocket: %s", string(msg), err)
 	}
 
