@@ -29,21 +29,15 @@ func TestCreateRoomAndJoin(t *testing.T) {
 	aeskeyhex := fmt.Sprintf("%x", privkey.D)
 	aeskeybytes, _ := hex.DecodeString(aeskeyhex)
 
-	err := user.CreateRoom(room)
-	if err != nil {
-		t.Errorf("Cannot create room %s: %s", room, err)
-	}
-
-	ws, err := user.JoinRoom(room)
+	ws, err := user.Chat(room)
 	if err != nil {
 		t.Errorf("Websocket connection failed for room '%s'. %s", room, err)
 	}
 
-	ws2, err := user2.JoinRoom(room)
-	if err != nil {
-		t.Errorf("Websocket connection failed for room '%s'. %s", room, err)
+	_, errws := user2.Chat(room)
+	if errws != nil {
+		t.Errorf("Websocket connection failed for room '%s'. %s", room, errws)
 	}
-	ws2 = ws2
 
 	var AESConn = client.NewAESConnection(ws, aeskeybytes)
 

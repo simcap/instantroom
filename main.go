@@ -9,28 +9,26 @@ import (
 	"log"
 	"math/big"
 	"net/http"
-	"os"
 	"strings"
 
+	"github.com/garyburd/redigo/redis"
 	"github.com/gorilla/websocket"
-	redislib "github.com/xuyu/goredis"
 )
 
-var redis = initRedis()
+var redisConn = initRedis()
 var challenge = []byte("secured")
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
 
-func initRedis() *redislib.Redis {
-	client, err := redislib.Dial(&redislib.DialConfig{Address: "127.0.0.1:6379"})
+func initRedis() redis.Conn {
+	conn, err := redis.Dial("tcp", ":6379")
 	if err != nil {
-		log.Printf("Cannot connect to redis. %s", err)
-		os.Exit(1)
+		log.Fatalf("Cannot connect to redis. %s", err)
 	}
 	log.Print("Connected to redis")
-	return client
+	return conn
 }
 
 type Room struct {
@@ -41,23 +39,30 @@ type Room struct {
 var rooms = map[string]*Room{}
 
 func main() {
-	http.HandleFunc("/room", room)
-	http.HandleFunc("/join", join)
+	http.HandleFunc("/chat", chat)
 	http.ListenAndServe(":8080", nil)
+	defer redisConn.Close()
 }
 
-func room(w http.ResponseWriter, r *http.Request) {
+func chat(w http.ResponseWriter, r *http.Request) {
 	room := r.FormValue("room")
 	username := r.FormValue("username")
 	pkey := r.FormValue("pkey")
 
-	keyerr := redis.Set(room, pkey, 3600, 0, false, true)
-	if keyerr != nil {
-		log.Printf("Cannot create room '%s'. %s", room, keyerr)
-		http.Error(w, "", http.StatusInternalServerError)
+	roomexists, _ := redis.Bool(redisConn.Do("EXISTS", room))
+	if roomexists {
+		join(w, r)
+	} else {
+		created, err := redis.Bool(redisConn.Do("SETNX", room, pkey))
+		if !created {
+			log.Printf("Cannot create room '%s'. %s", room, err)
+			http.Error(w, "", http.StatusInternalServerError)
+		} else {
+			log.Printf("Created room '%s' for user '%s'", room, username)
+		}
+		join(w, r)
 	}
 
-	log.Printf("Created room '%s' for user '%s'", room, username)
 }
 
 func join(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +71,7 @@ func join(w http.ResponseWriter, r *http.Request) {
 	sigints := strings.Split(r.FormValue("sig"), ",")
 
 	pubkey, err := getPublicKey(room)
+
 	if err != nil {
 		m := fmt.Sprintf("Cannot use public key for room '%s'. %s", room, err)
 		log.Print(m)
@@ -128,7 +134,7 @@ func AddUserToRoom(conn *websocket.Conn, room string, username string) *Room {
 }
 
 func getPublicKey(room string) (*ecdsa.PublicKey, error) {
-	key, err := redis.Get(room)
+	key, err := redis.String(redisConn.Do("GET", room))
 	if err != nil {
 		m := fmt.Sprintf("Public key for room '%s': error retrieving key: %s", room, err)
 		log.Print(m)

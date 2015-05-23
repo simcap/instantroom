@@ -15,9 +15,8 @@ import (
 var storagePath = filepath.Join(os.Getenv("HOME"), ".instantroom")
 
 func main() {
-	room := flag.String("r", "", "name of room to create")
+	room := flag.String("r", "", "name of room to create/join")
 	username := flag.String("u", "", "user name")
-	join := flag.String("j", "", "name of room to join")
 	host := flag.String("h", "127.0.0.1:8080", "address and port of host")
 
 	flag.Parse()
@@ -28,19 +27,15 @@ func main() {
 		*host,
 	}
 
-	if *room != "" {
-		err := service.CreateRoom(*room)
+	if *room != "" && *username != "" {
+		ws, err := service.Chat(*room)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
 
-	if *join != "" {
-		privkey, _ := service.GetPrivateKey(*join)
+		privkey, err := service.GetPrivateKey(*room)
 		aeskeyhex := fmt.Sprintf("%x", privkey.D)
 		aeskeybytes, _ := hex.DecodeString(aeskeyhex)
-
-		ws, err := service.JoinRoom(*join)
 		var AES = client.NewAESConnection(ws, aeskeybytes)
 
 		if err != nil {
@@ -70,5 +65,8 @@ func main() {
 				log.Fatalf("Failed to write message on websocket: %s", err)
 			}
 		}
+	} else {
+		flag.Usage()
+		os.Exit(1)
 	}
 }

@@ -20,6 +20,7 @@ type Keystore interface {
 	GetPublicKeyBytes(room string) ([]byte, error)
 	GetPublicKeyBase64(room string) (string, error)
 	GetPrivateKey(room string) (*ecdsa.PrivateKey, error)
+	HasPrivateKey(room string) bool
 	GenerateKeys(room string) (*ecdsa.PrivateKey, error)
 }
 
@@ -29,34 +30,23 @@ type Client struct {
 	Host     string
 }
 
-func (c *Client) CreateRoom(room string) error {
-	roomurl := fmt.Sprintf("http://%s/room", c.Host)
-
-	c.GenerateKeys(room)
+func (c *Client) Chat(room string) (*websocket.Conn, error) {
+	var privkey *ecdsa.PrivateKey
+	if c.HasPrivateKey(room) {
+		k, err := c.GetPrivateKey(room)
+		if err != nil {
+			return nil, fmt.Errorf("Joining room '%s': cannot get private key: %s", room, err)
+		}
+		privkey = k
+	} else {
+		k, err := c.GenerateKeys(room)
+		if err != nil {
+			return nil, fmt.Errorf("Joining room '%s': cannot generate keys: %s", room, err)
+		}
+		privkey = k
+	}
 
 	pubkey_base64, _ := c.GetPublicKeyBase64(room)
-	resp, err := http.PostForm(roomurl, url.Values{
-		"room":     {room},
-		"username": {c.Username},
-		"pkey":     {pubkey_base64},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if status := resp.StatusCode; status != 200 {
-		return fmt.Errorf("Failed to create room '%s' at %s", room, roomurl)
-	}
-
-	return nil
-}
-
-func (c *Client) JoinRoom(room string) (*websocket.Conn, error) {
-	privkey, err := c.GetPrivateKey(room)
-	if err != nil {
-		return nil, fmt.Errorf("Joining room '%s': cannot get private key: %s", room, err)
-	}
 
 	r, s, err := ecdsa.Sign(rand.Reader, privkey, []byte("secured"))
 	if err != nil {
@@ -65,9 +55,10 @@ func (c *Client) JoinRoom(room string) (*websocket.Conn, error) {
 
 	origin := fmt.Sprintf("http://%s/", c.Host)
 	header := http.Header{"Origin": {origin}}
-	u, _ := url.Parse(fmt.Sprintf("ws://%s/join", c.Host))
+	u, _ := url.Parse(fmt.Sprintf("ws://%s/chat", c.Host))
 	params := url.Values{}
 	params.Add("room", room)
+	params.Add("pkey", pubkey_base64)
 	params.Add("username", c.Username)
 	params.Add("sig", fmt.Sprintf("%s,%s", r, s))
 	u.RawQuery = params.Encode()
@@ -116,6 +107,14 @@ func (k *CLIKeystore) GetPublicKeyBase64(room string) (string, error) {
 	return encoded, err
 }
 
+func (k *CLIKeystore) HasPrivateKey(room string) bool {
+	path := filepath.Join(k.StoragePath, room, "private.der")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
 func (k *CLIKeystore) GetPrivateKey(room string) (*ecdsa.PrivateKey, error) {
 	privkey_bytes, _ := ioutil.ReadFile(filepath.Join(k.StoragePath, room, "private.der"))
 	privkey, err := x509.ParseECPrivateKey(privkey_bytes)
@@ -144,6 +143,11 @@ func (k *MemoryKeystore) GetPublicKeyBase64(room string) (string, error) {
 	bytes, err := k.GetPublicKeyBytes(room)
 	encoded := base64.StdEncoding.EncodeToString(bytes)
 	return encoded, err
+}
+
+func (k *MemoryKeystore) HasPrivateKey(room string) bool {
+	_, ok := k.privkeys[room]
+	return ok
 }
 
 func (k *MemoryKeystore) GetPrivateKey(room string) (*ecdsa.PrivateKey, error) {
