@@ -57,9 +57,9 @@ func chat(w http.ResponseWriter, r *http.Request) {
 		if !created {
 			log.Printf("Cannot create room '%s'. %s", room, err)
 			http.Error(w, "", http.StatusInternalServerError)
-		} else {
-			log.Printf("Created room '%s' for user '%s'", room, username)
+			return
 		}
+		log.Printf("Created room '%s' for user '%s'", room, username)
 		join(w, r)
 	}
 
@@ -87,20 +87,22 @@ func join(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 
 		if err != nil {
-			m := fmt.Sprintf("Connection updgrae failed for room '%s': %s", room, err)
+			m := fmt.Sprintf("Connection upgrade failed for room '%s': %s", room, err)
 			log.Print(m)
 			http.Error(w, m, http.StatusInternalServerError)
+			return
 		}
 		dispatch(conn, room, username)
 	} else {
 		m := fmt.Sprintf("Handshake failed for room '%s': invalid signature", room)
 		log.Print(m)
 		http.Error(w, m, http.StatusInternalServerError)
+		return
 	}
 }
 
 func dispatch(conn *websocket.Conn, roomname string, username string) {
-	room := AddUserToRoom(conn, roomname, username)
+	room := addUserToRoom(conn, roomname, username)
 	log.Printf("... start dispatching for %#v", room.users)
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -115,7 +117,7 @@ func dispatch(conn *websocket.Conn, roomname string, username string) {
 	}
 }
 
-func AddUserToRoom(conn *websocket.Conn, room string, username string) *Room {
+func addUserToRoom(conn *websocket.Conn, room string, username string) *Room {
 	if r, ok := rooms[room]; ok {
 		if _, ok := r.users[username]; ok {
 			log.Printf("%s already in room %s", username, room)
